@@ -1,14 +1,12 @@
-# Some code was borrowed from https://github.com/petewarden/tensorflow_makefile/blob/master/tensorflow/models/image/mnist/convolutional.py
-
+#!/usr/bin/anaconda3/bin/python3
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
 import numpy
-
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-
+import os,sys
+sys.path.append(os.getcwd())
 import mnist_data
 import cnn_model
 
@@ -46,10 +44,10 @@ def train():
 
     # Get loss of model
     with tf.name_scope("LOSS"):
-        loss = slim.losses.softmax_cross_entropy(y,y_)
+        loss = tf.losses.softmax_cross_entropy(onehot_labels=y_,logits=y)
 
     # Create a summary to monitor loss tensor
-    tf.scalar_summary('loss', loss)
+    tf.summary.scalar('loss', loss)
 
     # Define optimizer
     with tf.name_scope("ADAM"):
@@ -63,11 +61,12 @@ def train():
             train_size,  # Decay step.
             0.95,  # Decay rate.
             staircase=True)
+
         # Use simple momentum for the optimization.
         train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss,global_step=batch)
 
     # Create a summary to monitor learning_rate tensor
-    tf.scalar_summary('learning_rate', learning_rate)
+    tf.summary.scalar('learning_rate', learning_rate)
 
     # Get accuracy of model
     with tf.name_scope("ACC"):
@@ -75,10 +74,10 @@ def train():
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     # Create a summary to monitor accuracy tensor
-    tf.scalar_summary('acc', accuracy)
+    tf.summary.scalar('acc', accuracy)
 
     # Merge all summaries into a single op
-    merged_summary_op = tf.merge_all_summaries()
+    merged_summary_op = tf.summary.merge_all()
 
     # Add ops to save and restore all the variables
     saver = tf.train.Saver()
@@ -89,7 +88,7 @@ def train():
     total_batch = int(train_size / batch_size)
 
     # op to write logs to Tensorboard
-    summary_writer = tf.train.SummaryWriter(LOGS_DIRECTORY, graph=tf.get_default_graph())
+    summary_writer = tf.summary.FileWriter(LOGS_DIRECTORY, graph=tf.get_default_graph())
 
     # Save the maximum accuracy value for validation data
     max_acc = 0.
@@ -130,6 +129,9 @@ def train():
 
                 print("Epoch:", '%04d,' % (epoch + 1),
                 "batch_index %4d/%4d, validation accuracy %.5f" % (i, total_batch, validation_accuracy))
+
+            #Flush to std-out
+            sys.stdout.flush()
 
             # Save the current model if the maximum accuracy is updated
             if validation_accuracy > max_acc:

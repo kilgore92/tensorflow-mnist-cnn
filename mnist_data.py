@@ -1,17 +1,12 @@
-# Some code was borrowed from https://github.com/petewarden/tensorflow_makefile/blob/master/tensorflow/models/image/mnist/convolutional.py
-
+#!/usr/bin/anaconda3/bin/python3
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
 import gzip
 import os
-
 import numpy
 from scipy import ndimage
-
 from six.moves import urllib
-
 import tensorflow as tf
 
 SOURCE_URL = 'http://yann.lecun.com/exdb/mnist/'
@@ -84,8 +79,8 @@ def expend_training_data(images, labels):
         expanded_labels.append(y)
 
         # get a value for the background
-        # zero is the expected value, but median() is used to estimate background's value 
-        bg_value = numpy.median(x) # this is regarded as background's value        
+        # zero is the expected value, but median() is used to estimate background's value
+        bg_value = numpy.median(x) # this is regarded as background's value
         image = numpy.reshape(x, (-1, 28))
 
         for i in range(4):
