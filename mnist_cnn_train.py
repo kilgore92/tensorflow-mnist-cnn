@@ -19,6 +19,8 @@ training_epochs = 10# 10 for augmented training data, 20 for training data
 TRAIN_BATCH_SIZE = 50
 display_step = 100
 validation_step = 500
+CENTER_LOSS_ALPHA = 0.5
+CENTER_LOSS_LAMBDA = 1e-2
 
 # Params for test
 TEST_BATCH_SIZE = 5000
@@ -37,17 +39,33 @@ def train():
 
     # tf Graph input
     x = tf.placeholder(tf.float32, [None, 784])
-    y_ = tf.placeholder(tf.float32, [None, 10]) #answer
+    y_ = tf.placeholder(tf.int32, [None, 10]) #answer
 
-    # Predict
-    y = cnn_model.CNN(x)
+    # Get the bottleneck layer tensor
+    prelogits = cnn_model.CNN(x)
 
-    # Get loss of model
-    with tf.name_scope("LOSS"):
-        loss = tf.losses.softmax_cross_entropy(onehot_labels=y_,logits=y)
+    logits = slim.fully_connected(prelogits,
+                                  10,
+                                  activation_fn=None,
+                                  normalizer_fn=None,
+                                  weights_initializer=slim.initializers.xavier_initializer(),
+                                  scope='Logits',
+                                  reuse=False)
+
+    #Tensor to store normalized bottle-neck layer values
+    embeddings = tf.nn.l2_normalize(prelogits, 1, 1e-10, name='embeddings')
+
+    with tf.name_scope("center_loss"):
+        center_loss_term, _ = center_loss(features=prelogits,label=tf.argmax(y_,1),alfa=CENTER_LOSS_ALPHA,nrof_classes=10)
+
+    with tf.name_scope("classification_loss"):
+        classification_loss = tf.losses.softmax_cross_entropy(onehot_labels=y_,logits=logits)
+
+    with tf.name_scope("total_loss"):
+        total_loss = classification_loss + CENTER_LOSS_LAMBDA*center_loss_term
 
     # Create a summary to monitor loss tensor
-    tf.summary.scalar('loss', loss)
+    tf.summary.scalar('loss', total_loss)
 
     # Define optimizer
     with tf.name_scope("ADAM"):
@@ -63,14 +81,14 @@ def train():
             staircase=True)
 
         # Use simple momentum for the optimization.
-        train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss,global_step=batch)
+        train_step = tf.train.AdamOptimizer(learning_rate).minimize(total_loss,global_step=batch)
 
     # Create a summary to monitor learning_rate tensor
     tf.summary.scalar('learning_rate', learning_rate)
 
     # Get accuracy of model
     with tf.name_scope("ACC"):
-        correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
+        correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y_, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     # Create a summary to monitor accuracy tensor
@@ -163,6 +181,26 @@ def train():
         acc_buffer.append(numpy.sum(correct_prediction) / batch_size)
 
     print("test accuracy for the stored model: %g" % numpy.mean(acc_buffer))
+
+
+def center_loss(features, label, alfa, nrof_classes):
+    """Center loss based on the paper "A Discriminative Feature Learning Approach for Deep Face Recognition"
+       (http://ydwen.github.io/papers/WenECCV16.pdf)
+    """
+    nrof_features = features.get_shape()[1]
+    centers = tf.get_variable('centers', [nrof_classes, nrof_features], dtype=tf.float32,
+        initializer=tf.constant_initializer(0), trainable=False)
+    label = tf.reshape(label, [-1])
+
+    #Update centers
+    centers_batch = tf.gather(centers, label)
+    diff = (1 - alfa) * (centers_batch - features)
+    centers = tf.scatter_sub(centers, label, diff)
+
+    # Center-loss
+    with tf.control_dependencies([centers]):
+        loss = tf.reduce_mean(tf.square(features - centers_batch))
+    return loss, centers
 
 if __name__ == '__main__':
     train()
