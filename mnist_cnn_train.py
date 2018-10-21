@@ -7,7 +7,6 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import os,sys
 sys.path.append(os.getcwd())
-import mnist_data
 import cnn_model
 from tensorflow.examples.tutorials.mnist import input_data
 
@@ -135,8 +134,8 @@ def train():
     for i in range(20):
         test_batch = mnist.test.next_batch(500)
         y_final = sess.run(logits, feed_dict={x:test_batch[0], y_:test_batch[1], is_training: False})
-        correct_prediction = numpy.equal(numpy.argmax(y_final, 1), numpy.argmax(test_batch[1], 1))
-        acc_buffer.append(numpy.sum(correct_prediction) / batch_size)
+        correct_prediction = np.equal(np.argmax(y_final, 1), np.argmax(test_batch[1], 1))
+        acc_buffer.append(np.sum(correct_prediction) / batch_size)
 
     print("test accuracy for the stored model: %g" % numpy.mean(acc_buffer))
 
