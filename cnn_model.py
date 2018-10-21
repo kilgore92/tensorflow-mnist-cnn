@@ -7,7 +7,7 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
 # Create model of CNN with slim api
-def CNN(inputs, is_training=True,bottleneck_layer_size=128):
+def CNN(inputs, is_training=True,bottleneck_layer_size=2):
     batch_norm_params = {'is_training': is_training, 'decay': 0.9, 'updates_collections': None}
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         normalizer_fn=slim.batch_norm,
@@ -19,10 +19,23 @@ def CNN(inputs, is_training=True,bottleneck_layer_size=128):
         # padding='SAME', activation_fn=nn.relu,
         # weights_initializer = initializers.xavier_initializer(),
         # biases_initializer = init_ops.zeros_initializer,
-        net = slim.conv2d(x, 32, [5, 5], scope='conv1')
+
+        #Le-Net++ from Wen et al.
+        #Stage-1
+        net = slim.conv2d(x, 32, [5, 5], scope='conv1-1')
+        net = slim.conv2d(x, 32, [5, 5], scope='conv1-2')
         net = slim.max_pool2d(net, [2, 2], scope='pool1')
-        net = slim.conv2d(net, 64, [5, 5], scope='conv2')
+
+        #Stage-2
+        net = slim.conv2d(net, 64, [5, 5], scope='conv2-1')
+        net = slim.conv2d(net, 64, [5, 5], scope='conv2-2')
         net = slim.max_pool2d(net, [2, 2], scope='pool2')
+
+        #Stage-3
+        net = slim.conv2d(net, 128, [5, 5], scope='conv3-1')
+        net = slim.conv2d(net, 128, [5, 5], scope='conv3-2')
+        net = slim.max_pool2d(net, [2, 2], scope='pool3')
+
         net = slim.flatten(net, scope='flatten3')
 
         # For slim.fully_connected, default argument values are like
@@ -31,14 +44,9 @@ def CNN(inputs, is_training=True,bottleneck_layer_size=128):
         # weights_initializer = initializers.xavier_initializer(),
         # biases_initializer = init_ops.zeros_initializer,
 
-        # Pre-logits
-        net = slim.fully_connected(net, 1024, scope='fc3')
-        net = slim.dropout(net, is_training=is_training, scope='dropout3')  # 0.5 by default
-
         # Bottleneck Layer -- Added by Ishaan
         net = slim.fully_connected(net,bottleneck_layer_size,activation_fn=None,scope='bottleneck')
 
-        #outputs = slim.fully_connected(net, 10, activation_fn=None, normalizer_fn=None, scope='fco')
 
         return net
 

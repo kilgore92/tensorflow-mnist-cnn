@@ -15,13 +15,13 @@ MODEL_DIRECTORY = "model/model.ckpt"
 LOGS_DIRECTORY = "logs/train"
 
 # Params for Train
-training_epochs = 10# 10 for augmented training data, 20 for training data
-TRAIN_BATCH_SIZE = 50
+training_epochs = 50 # 10 for augmented training data, 20 for training data
+TRAIN_BATCH_SIZE = 100
 display_step = 100
 validation_step = 500
 CENTER_LOSS_ALPHA = 0.5
 CENTER_LOSS_LAMBDA = 1e-2
-
+LEARNING_RATE = 0.0005
 # Params for test
 TEST_BATCH_SIZE = 5000
 
@@ -69,22 +69,9 @@ def train():
 
     # Define optimizer
     with tf.name_scope("ADAM"):
-        # Optimizer: set up a variable that's incremented once per batch and
-        # controls the learning rate decay.
         batch = tf.Variable(0)
-
-        learning_rate = tf.train.exponential_decay(
-            1e-4,  # Base learning rate.
-            batch * batch_size,  # Current index into the dataset.
-            train_size,  # Decay step.
-            0.95,  # Decay rate.
-            staircase=True)
-
         # Use simple momentum for the optimization.
-        train_step = tf.train.AdamOptimizer(learning_rate).minimize(total_loss,global_step=batch)
-
-    # Create a summary to monitor learning_rate tensor
-    tf.summary.scalar('learning_rate', learning_rate)
+        train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(total_loss,global_step=batch)
 
     # Get accuracy of model
     with tf.name_scope("ACC"):
@@ -176,7 +163,7 @@ def train():
         batch_xs = test_data[offset:(offset + batch_size), :]
         batch_ys = test_labels[offset:(offset + batch_size), :]
 
-        y_final = sess.run(y, feed_dict={x: batch_xs, y_: batch_ys, is_training: False})
+        y_final = sess.run(logits, feed_dict={x: batch_xs, y_: batch_ys, is_training: False})
         correct_prediction = numpy.equal(numpy.argmax(y_final, 1), numpy.argmax(batch_ys, 1))
         acc_buffer.append(numpy.sum(correct_prediction) / batch_size)
 
