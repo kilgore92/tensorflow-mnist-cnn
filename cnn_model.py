@@ -12,7 +12,7 @@ def CNN(inputs, is_training=True,bottleneck_layer_size=2):
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         normalizer_fn=slim.batch_norm,
                         normalizer_params=batch_norm_params):
-        x = tf.reshape(inputs, [-1, 28, 28, 1])
+        net = tf.reshape(inputs, [-1, 28, 28, 1])
 
         # For slim.conv2d, default argument values are like
         # normalizer_fn = None, normalizer_params = None, <== slim.arg_scope changes these arguments
@@ -22,8 +22,8 @@ def CNN(inputs, is_training=True,bottleneck_layer_size=2):
 
         #Le-Net++ from Wen et al.
         #Stage-1
-        net = slim.conv2d(x, 32, [5, 5], scope='conv1-1')
-        net = slim.conv2d(x, 32, [5, 5], scope='conv1-2')
+        net = slim.conv2d(net, 32, [5, 5], scope='conv1-1')
+        net = slim.conv2d(net, 32, [5, 5], scope='conv1-2')
         net = slim.max_pool2d(net, [2, 2], scope='pool1')
 
         #Stage-2
