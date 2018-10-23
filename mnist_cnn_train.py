@@ -19,10 +19,10 @@ display_step = 100
 NUM_STEPS = 20000
 validation_step = 500
 CENTER_LOSS_ALPHA = 0.5
-CENTER_LOSS_LAMBDA = 1e-2
+CENTER_LOSS_LAMBDA = 0.5
 LEARNING_RATE = 0.0005
 # Params for test
-TEST_BATCH_SIZE = 5000
+TEST_BATCH_SIZE = 1000
 
 def train():
 
@@ -42,11 +42,10 @@ def train():
     embeddings = tf.nn.l2_normalize(bottleneck_layer, 1, 1e-10, name='embeddings')
 
     with tf.name_scope("center_loss"):
-        center_loss_term, _ = center_loss(features=bottleneck_layer,label=y_,alfa=CENTER_LOSS_ALPHA,nrof_classes=10)
+        center_loss_term,_,_ = center_loss(features=bottleneck_layer,labels=y_,alpha=CENTER_LOSS_ALPHA,num_classes=10)
 
     with tf.name_scope("classification_loss"):
-        classification_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=y_, logits=logits, name='cross_entropy'))
+        classification_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=logits, name='cross_entropy'))
 
     with tf.name_scope("total_loss"):
         total_loss = classification_loss + CENTER_LOSS_LAMBDA*center_loss_term
@@ -56,9 +55,9 @@ def train():
 
     # Define optimizer
     with tf.name_scope("ADAM"):
-        batch = tf.Variable(0)
+        global_step = tf.Variable(0,name='global_step',trainable=False)
         # Use simple momentum for the optimization.
-        train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(total_loss,global_step=batch)
+        train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(total_loss,global_step=global_step)
 
     # Get accuracy of model
     with tf.name_scope("ACC"):
@@ -87,25 +86,26 @@ def train():
         # Run optimization op (backprop), loss op (to get loss value)
         # and summary nodes
         batch = mnist.train.next_batch(TRAIN_BATCH_SIZE)
-        _, train_accuracy, summary = sess.run([train_step, accuracy, merged_summary_op] , feed_dict={x: batch[0], y_: batch[1], is_training: True})
+        batch_images = normalize_batch(batch[0])
+        batch_labels = batch[1]
+        _, train_accuracy, summary,total_loss_value,softmax_loss,center_loss_value = sess.run([train_step, accuracy, merged_summary_op,total_loss,classification_loss,center_loss_term] , feed_dict={x: batch_images, y_: batch_labels, is_training: True})
 
         # Write logs at every iteration
         summary_writer.add_summary(summary,steps)
 
         # Display logs
         if steps % display_step == 0:
-            print('Step : {0} Training accuracy : {1}'.format(steps,train_accuracy))
+            print('Step : {0} Training accuracy : {1} Total Loss : {2} Classification : {3} Center : {4}'.format(steps,train_accuracy,total_loss_value,softmax_loss,center_loss_value))
 
         # Get accuracy for validation data
         if steps % validation_step == 0:
             # Calculate accuracy
             test_batch = mnist.test.next_batch(TRAIN_BATCH_SIZE)
-            validation_accuracy = sess.run(accuracy,
-            feed_dict={x:test_batch[0], y_:test_batch[1], is_training: False})
+            test_batch_images = normalize_batch(test_batch[0])
+            batch_labels = test_batch[1]
+            validation_accuracy = sess.run(accuracy,feed_dict={x:batch_images, y_:test_batch[1], is_training: False})
             print('Step : {0} Test set accuracy : {1}'.format(steps,validation_accuracy))
 
-
-        #Flush to std-out
         sys.stdout.flush()
 
         # Save the current model if the maximum accuracy is updated
@@ -124,32 +124,65 @@ def train():
 
     # Avg accuracy over 20 mini-batches from the test set
     for i in range(20):
-        test_batch = mnist.test.next_batch(500)
-        y_final = sess.run(logits, feed_dict={x:test_batch[0], y_:test_batch[1], is_training: False})
-        correct_prediction = np.equal(np.argmax(y_final, 1), test_batch[1])
-        acc_buffer.append(np.sum(correct_prediction) / batch_size)
+        test_batch = mnist.test.next_batch(TEST_BATCH_SIZE)
+        test_batch_images = normalize_batch(test_batch[0])
+        test_batch_labels = test_batch[1]
+        y_final = sess.run(logits, feed_dict={x:test_batch_images, y_:test_batch_labels, is_training: False})
+        correct_prediction = np.equal(np.argmax(y_final, 1), test_batch_labels)
+        acc_buffer.append(np.sum(correct_prediction) / TEST_BATCH_SIZE)
 
     print("test accuracy for the stored model: %g" % numpy.mean(acc_buffer))
 
-
-def center_loss(features, label, alfa, nrof_classes):
-    """Center loss based on the paper "A Discriminative Feature Learning Approach for Deep Face Recognition"
-       (http://ydwen.github.io/papers/WenECCV16.pdf)
+def normalize_batch(batch_images):
     """
-    nrof_features = features.get_shape()[1]
-    centers = tf.get_variable('centers', [nrof_classes, nrof_features], dtype=tf.float32,
+    Normalize to [-1,1] range
+
+    """
+    return (batch_images/127.5)-1.0
+
+
+def center_loss(features, labels, alpha, num_classes):
+    """获取center loss及center的更新op
+
+    Arguments:
+        features: Tensor,表征样本特征,一般使用某个fc层的输出,shape应该为[batch_size, feature_length].
+        labels: Tensor,表征样本label,非one-hot编码,shape应为[batch_size].
+        alpha: 0-1之间的数字,控制样本类别中心的学习率,细节参考原文.
+        num_classes: 整数,表明总共有多少个类别,网络分类输出有多少个神经元这里就取多少.
+
+    Return：
+        loss: Tensor,可与softmax loss相加作为总的loss进行优化.
+        centers: Tensor,存储样本中心值的Tensor，仅查看样本中心存储的具体数值时有用.
+        centers_update_op: op,用于更新样本中心的op，在训练时需要同时运行该op，否则样本中心不会更新
+    """
+    # 获取特征的维数，例如256维
+    len_features = features.get_shape()[1]
+    # 建立一个Variable,shape为[num_classes, len_features]，用于存储整个网络的样本中心，
+    # 设置trainable=False是因为样本中心不是由梯度进行更新的
+    centers = tf.get_variable('centers', [num_classes, len_features], dtype=tf.float32,
         initializer=tf.constant_initializer(0), trainable=False)
-    label = tf.reshape(label, [-1])
+    # 将label展开为一维的，输入如果已经是一维的，则该动作其实无必要
+    labels = tf.reshape(labels, [-1])
 
-    #Update centers
-    centers_batch = tf.gather(centers, label)
-    diff = (1 - alfa) * (centers_batch - features)
-    centers = tf.scatter_sub(centers, label, diff)
+    # 根据样本label,获取mini-batch中每一个样本对应的中心值
+    centers_batch = tf.gather(centers, labels)
+    # 计算loss
+    loss = tf.nn.l2_loss(features - centers_batch)
 
-    # Center-loss
-    with tf.control_dependencies([centers]):
-        loss = tf.reduce_mean(tf.square(features - centers_batch))
-    return loss, centers
+    # 当前mini-batch的特征值与它们对应的中心值之间的差
+    diff = centers_batch - features
+
+    # 获取mini-batch中同一类别样本出现的次数,了解原理请参考原文公式(4)
+    unique_label, unique_idx, unique_count = tf.unique_with_counts(labels)
+    appear_times = tf.gather(unique_count, unique_idx)
+    appear_times = tf.reshape(appear_times, [-1, 1])
+
+    diff = diff / tf.cast((1 + appear_times), tf.float32)
+    diff = alpha * diff
+
+    centers_update_op = tf.scatter_sub(centers, labels, diff)
+
+    return loss, centers, centers_update_op
 
 if __name__ == '__main__':
     train()

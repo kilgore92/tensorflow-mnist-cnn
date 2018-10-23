@@ -8,9 +8,7 @@ import tensorflow.contrib.slim as slim
 
 def CNN(inputs, is_training=True,bottleneck_layer_size=2):
     batch_norm_params = {'is_training': is_training, 'decay': 0.9, 'updates_collections': None}
-    with slim.arg_scope([slim.conv2d, slim.fully_connected],
-                        normalizer_fn=slim.batch_norm,
-                        normalizer_params=batch_norm_params):
+    with slim.arg_scope([slim.conv2d, slim.fully_connected]):
 
         net = tf.reshape(inputs, [-1, 28, 28, 1])
 
@@ -47,7 +45,9 @@ def CNN(inputs, is_training=True,bottleneck_layer_size=2):
         # Bottleneck Layer
         bottleneck_layer = slim.fully_connected(net,bottleneck_layer_size,activation_fn=None,scope='bottleneck')
 
-        logits = slim.fully_connected(bottleneck_layer,
+        prelu_layer = PRelu(bottleneck_layer)
+
+        logits = slim.fully_connected(prelu_layer,
                                       10,
                                       activation_fn=None,
                                       normalizer_fn=None,
@@ -56,3 +56,13 @@ def CNN(inputs, is_training=True,bottleneck_layer_size=2):
                                       reuse=False)
 
         return logits,bottleneck_layer
+
+def PRelu(x, name='PRelu'):
+    """
+    PReLU implementation  : https://github.com/zoli333/Center-Loss/blob/master/nn.py
+    """
+    with tf.variable_scope(name):
+        alpha = tf.get_variable('alpha',shape=x.get_shape()[1:],dtype=tf.float32,initializer=tf.zeros_initializer(),trainable=True)
+        pos = tf.nn.relu(x)
+        neg = -alpha * tf.nn.relu(-x)
+        return pos + neg
