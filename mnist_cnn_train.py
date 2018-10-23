@@ -17,7 +17,7 @@ LOGS_DIRECTORY = "logs/train"
 TRAIN_BATCH_SIZE = 128
 display_step = 100
 NUM_STEPS = 20000
-validation_step = 500
+validation_step = 100
 LEARNING_RATE = 0.001
 
 # Center-Loss
@@ -108,8 +108,8 @@ def train():
             # Calculate accuracy
             test_batch = mnist.test.next_batch(TRAIN_BATCH_SIZE)
             test_batch_images = normalize_batch(test_batch[0],image_mean=image_mean)
-            batch_labels = test_batch[1]
-            validation_accuracy = sess.run(accuracy,feed_dict={x:batch_images, y_:test_batch[1], is_training: False})
+            test_batch_labels = test_batch[1]
+            validation_accuracy = sess.run(accuracy,feed_dict={x:test_batch_images, y_:test_batch_labels, is_training: False})
             print('Step : {0} Test set accuracy : {1}'.format(steps,validation_accuracy))
 
         sys.stdout.flush()
