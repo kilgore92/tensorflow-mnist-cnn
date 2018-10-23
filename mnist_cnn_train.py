@@ -14,19 +14,24 @@ MODEL_DIRECTORY = "model/model.ckpt"
 LOGS_DIRECTORY = "logs/train"
 
 # Params for Train
-TRAIN_BATCH_SIZE = 100
+TRAIN_BATCH_SIZE = 128
 display_step = 100
 NUM_STEPS = 20000
 validation_step = 500
+LEARNING_RATE = 0.001
+
+# Center-Loss
 CENTER_LOSS_ALPHA = 0.5
 CENTER_LOSS_LAMBDA = 0.5
-LEARNING_RATE = 0.0005
+
 # Params for test
 TEST_BATCH_SIZE = 1000
 
 def train():
 
     mnist = input_data.read_data_sets('./mnist')
+
+    image_mean = np.mean(mnist.train.images, axis=0)
 
     # Boolean for MODE of train or test
     is_training = tf.placeholder(tf.bool, name='MODE')
@@ -42,7 +47,7 @@ def train():
     embeddings = tf.nn.l2_normalize(bottleneck_layer, 1, 1e-10, name='embeddings')
 
     with tf.name_scope("center_loss"):
-        center_loss_term,_,_ = center_loss(features=bottleneck_layer,labels=y_,alpha=CENTER_LOSS_ALPHA,num_classes=10)
+        center_loss_term,_,centers_update_op = center_loss(features=bottleneck_layer,labels=y_,alpha=CENTER_LOSS_ALPHA,num_classes=10)
 
     with tf.name_scope("classification_loss"):
         classification_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_, logits=logits, name='cross_entropy'))
@@ -57,7 +62,8 @@ def train():
     with tf.name_scope("ADAM"):
         global_step = tf.Variable(0,name='global_step',trainable=False)
         # Use simple momentum for the optimization.
-        train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(total_loss,global_step=global_step)
+        with tf.control_dependencies([centers_update_op]):
+            train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(total_loss,global_step=global_step)
 
     # Get accuracy of model
     with tf.name_scope("ACC"):
@@ -86,7 +92,7 @@ def train():
         # Run optimization op (backprop), loss op (to get loss value)
         # and summary nodes
         batch = mnist.train.next_batch(TRAIN_BATCH_SIZE)
-        batch_images = normalize_batch(batch[0])
+        batch_images = normalize_batch(batch[0],image_mean=image_mean)
         batch_labels = batch[1]
         _, train_accuracy, summary,total_loss_value,softmax_loss,center_loss_value = sess.run([train_step, accuracy, merged_summary_op,total_loss,classification_loss,center_loss_term] , feed_dict={x: batch_images, y_: batch_labels, is_training: True})
 
@@ -101,7 +107,7 @@ def train():
         if steps % validation_step == 0:
             # Calculate accuracy
             test_batch = mnist.test.next_batch(TRAIN_BATCH_SIZE)
-            test_batch_images = normalize_batch(test_batch[0])
+            test_batch_images = normalize_batch(test_batch[0],image_mean=image_mean)
             batch_labels = test_batch[1]
             validation_accuracy = sess.run(accuracy,feed_dict={x:batch_images, y_:test_batch[1], is_training: False})
             print('Step : {0} Test set accuracy : {1}'.format(steps,validation_accuracy))
@@ -125,7 +131,7 @@ def train():
     # Avg accuracy over 20 mini-batches from the test set
     for i in range(20):
         test_batch = mnist.test.next_batch(TEST_BATCH_SIZE)
-        test_batch_images = normalize_batch(test_batch[0])
+        test_batch_images = normalize_batch(test_batch[0],image_mean=image_mean)
         test_batch_labels = test_batch[1]
         y_final = sess.run(logits, feed_dict={x:test_batch_images, y_:test_batch_labels, is_training: False})
         correct_prediction = np.equal(np.argmax(y_final, 1), test_batch_labels)
@@ -133,12 +139,12 @@ def train():
 
     print("test accuracy for the stored model: %g" % numpy.mean(acc_buffer))
 
-def normalize_batch(batch_images):
+def normalize_batch(batch_images,image_mean):
     """
-    Normalize to [-1,1] range
+    Normalize to [0,1] range
 
     """
-    return (batch_images/127.5)-1.0
+    return batch_images-image_mean
 
 
 def center_loss(features, labels, alpha, num_classes):
