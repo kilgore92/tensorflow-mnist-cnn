@@ -6,12 +6,12 @@ from __future__ import print_function
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
-# Create model of CNN with slim api
 def CNN(inputs, is_training=True,bottleneck_layer_size=2):
     batch_norm_params = {'is_training': is_training, 'decay': 0.9, 'updates_collections': None}
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
                         normalizer_fn=slim.batch_norm,
                         normalizer_params=batch_norm_params):
+
         net = tf.reshape(inputs, [-1, 28, 28, 1])
 
         # For slim.conv2d, default argument values are like
@@ -44,24 +44,15 @@ def CNN(inputs, is_training=True,bottleneck_layer_size=2):
         # weights_initializer = initializers.xavier_initializer(),
         # biases_initializer = init_ops.zeros_initializer,
 
-        # Bottleneck Layer -- Added by Ishaan
-        net = slim.fully_connected(net,bottleneck_layer_size,activation_fn=None,scope='bottleneck')
+        # Bottleneck Layer
+        bottleneck_layer = slim.fully_connected(net,bottleneck_layer_size,activation_fn=None,scope='bottleneck')
 
+        logits = slim.fully_connected(bottleneck_layer,
+                                      10,
+                                      activation_fn=None,
+                                      normalizer_fn=None,
+                                      weights_initializer=slim.initializers.xavier_initializer(),
+                                      scope='Logits',
+                                      reuse=False)
 
-        return net
-
-
-def center_loss(features, label, alfa, nrof_classes):
-    """Center loss based on the paper "A Discriminative Feature Learning Approach for Deep Face Recognition"
-       (http://ydwen.github.io/papers/WenECCV16.pdf)
-    """
-    nrof_features = features.get_shape()[1]
-    centers = tf.get_variable('centers', [nrof_classes, nrof_features], dtype=tf.float32,
-        initializer=tf.constant_initializer(0), trainable=False)
-    label = tf.reshape(label, [-1])
-    centers_batch = tf.gather(centers, label)
-    diff = (1 - alfa) * (centers_batch - features)
-    centers = tf.scatter_sub(centers, label, diff)
-    with tf.control_dependencies([centers]):
-        loss = tf.reduce_mean(tf.square(features - centers_batch))
-    return loss, centers
+        return logits,bottleneck_layer

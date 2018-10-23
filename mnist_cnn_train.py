@@ -36,21 +36,13 @@ def train():
     y_ = tf.placeholder(tf.int32, [None]) #answer
 
     # Get the bottleneck layer tensor
-    prelogits = cnn_model.CNN(x)
-
-    logits = slim.fully_connected(prelogits,
-                                  10,
-                                  activation_fn=None,
-                                  normalizer_fn=None,
-                                  weights_initializer=slim.initializers.xavier_initializer(),
-                                  scope='Logits',
-                                  reuse=False)
+    logits,bottleneck_layer = cnn_model.CNN(x)
 
     #Tensor to store normalized bottle-neck layer values
-    embeddings = tf.nn.l2_normalize(prelogits, 1, 1e-10, name='embeddings')
+    embeddings = tf.nn.l2_normalize(bottleneck_layer, 1, 1e-10, name='embeddings')
 
     with tf.name_scope("center_loss"):
-        center_loss_term, _ = center_loss(features=prelogits,label=y_,alfa=CENTER_LOSS_ALPHA,nrof_classes=10)
+        center_loss_term, _ = center_loss(features=bottleneck_layer,label=y_,alfa=CENTER_LOSS_ALPHA,nrof_classes=10)
 
     with tf.name_scope("classification_loss"):
         classification_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -134,7 +126,7 @@ def train():
     for i in range(20):
         test_batch = mnist.test.next_batch(500)
         y_final = sess.run(logits, feed_dict={x:test_batch[0], y_:test_batch[1], is_training: False})
-        correct_prediction = np.equal(np.argmax(y_final, 1), np.argmax(test_batch[1], 1))
+        correct_prediction = np.equal(np.argmax(y_final, 1), test_batch[1])
         acc_buffer.append(np.sum(correct_prediction) / batch_size)
 
     print("test accuracy for the stored model: %g" % numpy.mean(acc_buffer))
