@@ -137,7 +137,7 @@ def train():
         correct_prediction = np.equal(np.argmax(y_final, 1), test_batch_labels)
         acc_buffer.append(np.sum(correct_prediction) / TEST_BATCH_SIZE)
 
-    print("test accuracy for the stored model: %g" % numpy.mean(acc_buffer))
+    print("Accuracy on test set : {} ".format(np.mean(acc_buffer)))
 
 def normalize_batch(batch_images,image_mean):
     """
