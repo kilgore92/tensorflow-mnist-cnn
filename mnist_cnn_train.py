@@ -150,6 +150,8 @@ def normalize_batch(batch_images,image_mean):
 def center_loss(features, labels, alpha, num_classes):
     """获取center loss及center的更新op
 
+    Implementation taken from : https://github.com/EncodeTS/TensorFlow_Center_Loss/blob/master/center_loss.py
+
     Arguments:
         features: Tensor,表征样本特征,一般使用某个fc层的输出,shape应该为[batch_size, feature_length].
         labels: Tensor,表征样本label,非one-hot编码,shape应为[batch_size].
