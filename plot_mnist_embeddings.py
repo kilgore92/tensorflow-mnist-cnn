@@ -8,6 +8,7 @@ import tensorflow.contrib.slim as slim
 import os,sys
 sys.path.append(os.getcwd())
 import cnn_model
+from mnist_cnn_train import normalize_batch
 from tensorflow.examples.tutorials.mnist import input_data
 
 MODEL_DIRECTORY = "./model"
@@ -45,8 +46,12 @@ def load_mnist_model(model_dir,sess,input_map=None):
     sys.stdout.flush()
 
 
-def plot_embeddings():
+def plot_embeddings(images,labels):
     """
+    Inputs:
+        images: MNIST images
+        labels: Image lables (used to color embeddings)
+
     Plot MNIST 2-D embeddings to illustrate the effect of
     center loss
 
@@ -55,14 +60,32 @@ def plot_embeddings():
         config = tf.ConfigProto()
         with tf.Session(config=config) as sess:
             load_mnist_model(model_dir=MODEL_DIRECTORY,sess=sess)
-            #DEBUG code -- REMOVE
-            for op in tf.get_default_graph().get_operations():
-                print(str(op.name))
-            sys.stdout.flush()
+            images_placeholder = tf.get_default_graph().get_tensor_by_name("images:0")
+            embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+            feed_dict = {images_placeholder:images}
+            emb = sess.run(embeddings, feed_dict=feed_dict)
+
+    print('Embeddings generated')
 
 
+
+def feed_images(num_images=50):
+    """
+    Inputs:
+        num_images : Number of images to feed
+    Returns:
+        Array of normalized,flattened images
+
+    """
+    mnist = input_data.read_data_sets('./mnist')
+    image_mean = np.mean(mnist.train.images, axis=0)
+    batch = mnist.train.next_batch(num_images)
+    batch_images = normalize_batch(batch[0],image_mean=image_mean)
+    batch_labels = batch[1]
+    return batch_images,batch_labels
 
 if __name__ == '__main__':
-    plot_embeddings()
+    images,labels = feed_images()
+    plot_embeddings(images=images,labels=labels)
 
 
