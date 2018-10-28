@@ -37,8 +37,8 @@ def train():
     is_training = tf.placeholder(tf.bool, name='MODE')
 
     # tf Graph input
-    x = tf.placeholder(tf.float32, [None, 784])
-    y_ = tf.placeholder(tf.int32, [None]) #answer
+    x = tf.placeholder(tf.float32, [None, 784],name='images')
+    y_ = tf.placeholder(tf.int32, [None],name='labels') #answer
 
     # Get the bottleneck layer tensor
     logits,bottleneck_layer = cnn_model.CNN(x)
