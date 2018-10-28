@@ -55,6 +55,11 @@ def plot_embeddings():
         config = tf.ConfigProto()
         with tf.Session(config=config) as sess:
             load_mnist_model(model_dir=MODEL_DIRECTORY,sess=sess)
+            #DEBUG code -- REMOVE
+            for op in tf.get_default_graph().get_operations():
+                print(str(op.name))
+            sys.stdout.flush()
+
 
 
 if __name__ == '__main__':
