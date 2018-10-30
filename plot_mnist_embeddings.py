@@ -10,6 +10,7 @@ sys.path.append(os.getcwd())
 import cnn_model
 from mnist_cnn_train import normalize_batch
 from tensorflow.examples.tutorials.mnist import input_data
+import pickle
 
 MODEL_DIRECTORY = "./model"
 
@@ -66,6 +67,19 @@ def plot_embeddings(images,labels):
             emb = sess.run(embeddings, feed_dict=feed_dict)
 
     print('Embeddings generated')
+
+    distinct_labels = set(list(labels))
+    plot_dict = {}
+
+    for label in distinct_labels:
+        plot_dict[label] = []
+        #Get indices for the current label
+        l_idxs = [idx for idx,l in enumerate(list(labels)) if l==label]
+        for idx in l_idxs:
+            plot_dict[label].append(emb[idx,:])
+    #Save the dict to plot offline
+    with open('mnist_plot_dict.pkl','wb') as f:
+        pickle.dump(plot_dict,f)
 
 
 
