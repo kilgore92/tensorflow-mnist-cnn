@@ -19,6 +19,7 @@ display_step = 100
 NUM_STEPS = 20000
 validation_step = 100
 LEARNING_RATE = 0.001
+BOTTLENECK_LAYER_SIZE = 8
 
 # Center-Loss
 CENTER_LOSS_ALPHA = 0.5
@@ -41,7 +42,7 @@ def train():
     y_ = tf.placeholder(tf.int32, [None],name='labels') #answer
 
     # Get the bottleneck layer tensor
-    logits,bottleneck_layer = cnn_model.CNN(x)
+    logits,bottleneck_layer = cnn_model.CNN(inputs=x,bottleneck_layer_size=BOTTLENECK_LAYER_SIZE)
 
     #Tensor to store normalized bottle-neck layer values
     embeddings = tf.nn.l2_normalize(bottleneck_layer, 1, 1e-10, name='embeddings')
